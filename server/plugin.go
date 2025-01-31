@@ -16,10 +16,40 @@ type Configuration struct {
 	BearerToken string
 }
 
+type BotConfig struct {
+	WebhookURL  string
+	BearerToken string
+}
+
 // Plugin implements the interface expected by the Mattermost server to communicate between the server and plugin processes.
 type BotWebhookPlugin struct {
 	plugin.MattermostPlugin
 	configuration *Configuration
+	botConfigMap  map[string]BotConfig
+}
+
+func parseBotConfig(botUserIDsStr, webhookURLsStr, bearerTokensStr string) map[string]BotConfig {
+	botUserIDs := strings.Split(boMessageHasBeenPostedtUserIDsStr, "\n")
+	webhookURLs := strings.Split(webhookURLsStr, "\n")
+	bearerTokens := strings.Split(bearerTokensStr, "\n")
+
+	botConfigMap := make(map[string]BotConfig)
+
+	for i, botID := range botUserIDs {
+		botID = strings.TrimSpace(botID)
+		if botID == "" || i >= len(webhookURLs) || i >= len(bearerTokens) {
+			continue
+		}
+
+		botConfig := BotConfig{
+			WebhookURL:  strings.TrimSpace(webhookURLs[i]),
+			BearerToken: strings.TrimSpace(bearerTokens[i]),
+		}
+
+		botConfigMap[botID] = botConfig
+	}
+
+	return botConfigMap
 }
 
 func (p *BotWebhookPlugin) OnConfigurationChange() error {
@@ -29,11 +59,12 @@ func (p *BotWebhookPlugin) OnConfigurationChange() error {
 		return err
 	}
 	p.configuration = &configuration
+	p.botConfigMap = parseBotConfig(configuration.BotUserID, configuration.WebhookURL, configuration.BearerToken)
 	return nil
 }
 
 func (p *BotWebhookPlugin) MessageHasBeenPosted(c *plugin.Context, post *model.Post) {
-	p.API.LogDebug("MessageHasBeenPosted")
+	p.API.LogDebug("MessageHasBeenPosted", "RequestId", c.RequestId)
 
 	channel, err := p.API.GetChannel(post.ChannelId)
 
@@ -42,11 +73,21 @@ func (p *BotWebhookPlugin) MessageHasBeenPosted(c *plugin.Context, post *model.P
 		return
 	}
 
-	if post.UserId == p.configuration.BotUserID {
+	_, exists := p.botConfigMap[post.UserId]
+	if exists {
 		return
 	}
 
-	if strings.Contains(channel.Name, p.configuration.BotUserID) {
+	var botConfig *BotConfig
+	for botID := range p.botConfigMap {
+		if strings.Contains(channel.Name, botID) {
+			config := p.botConfigMap[botID]
+			botConfig = &config
+			break
+		}
+	}
+
+	if botConfig != nil {
 		p.API.LogDebug("Message to bot detected", "channel", channel.Name, "user", post.UserId, "message", post.Message)
 
 		jsonPayload, err := json.Marshal(post)
@@ -55,8 +96,8 @@ func (p *BotWebhookPlugin) MessageHasBeenPosted(c *plugin.Context, post *model.P
 			return
 		}
 
-		req, err := http.NewRequest("POST", p.configuration.WebhookURL, bytes.NewBuffer(jsonPayload))
-		req.Header.Set("Authorization", "Bearer "+p.configuration.BearerToken)
+		req, err := http.NewRequest("POST", botConfig.WebhookURL, bytes.NewBuffer(jsonPayload))
+		req.Header.Set("Authorization", "Bearer "+botConfig.BearerToken)
 		if err != nil {
 			p.API.LogError("Failed to create HTTP request", "error", err.Error())
 			return
