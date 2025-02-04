@@ -33,17 +33,32 @@ func parseBotConfig(botUserIDsStr, webhookURLsStr, bearerTokensStr string) map[s
 	webhookURLs := strings.Split(webhookURLsStr, "\n")
 	bearerTokens := strings.Split(bearerTokensStr, "\n")
 
+	// check input length
+	if len(botUserIDs) != len(webhookURLs) {
+		return nil, fmt.Errorf("BotId vs WebhookUrl mismatched in lengths: bots=%d, webhooks=%d", len(botUserIDs), len(webhookURLs))
+	}
+	
 	botConfigMap := make(map[string]BotConfig)
 
 	for i, botID := range botUserIDs {
 		botID = strings.TrimSpace(botID)
-		if botID == "" || i >= len(webhookURLs) || i >= len(bearerTokens) {
-			continue
+		if botID == "" {
+			return nil, fmt.Errorf("Bot ID at line %d is empty", i)
+		}
+
+		webhookURL := strings.TrimSpace(webhookURLs[i])
+		if webhookURL == "" {
+			return nil, fmt.Errorf("Webhook URL for bot ID %s is empty", botID)
+		}
+
+		bearerToken := ""
+		if i < len(bearerTokens) {
+			bearerToken = strings.TrimSpace(bearerTokens[i])
 		}
 
 		botConfig := BotConfig{
-			WebhookURL:  strings.TrimSpace(webhookURLs[i]),
-			BearerToken: strings.TrimSpace(bearerTokens[i]),
+			WebhookURL:  webhookURL,
+			BearerToken: bearerToken,
 		}
 
 		botConfigMap[botID] = botConfig
@@ -97,10 +112,12 @@ func (p *BotWebhookPlugin) MessageHasBeenPosted(c *plugin.Context, post *model.P
 		}
 
 		req, err := http.NewRequest("POST", botConfig.WebhookURL, bytes.NewBuffer(jsonPayload))
-		req.Header.Set("Authorization", "Bearer "+botConfig.BearerToken)
 		if err != nil {
 			p.API.LogError("Failed to create HTTP request", "error", err.Error())
 			return
+		}
+		if botConfig.BearerToken != "" {
+    			req.Header.Set("Authorization", "Bearer "+botConfig.BearerToken)
 		}
 		req.Header.Set("Content-Type", "application/json")
 
