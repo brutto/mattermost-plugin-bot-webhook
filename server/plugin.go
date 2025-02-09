@@ -29,7 +29,7 @@ type BotWebhookPlugin struct {
 }
 
 func parseBotConfig(botUserIDsStr, webhookURLsStr, bearerTokensStr string) map[string]BotConfig {
-	botUserIDs := strings.Split(boMessageHasBeenPostedtUserIDsStr, "\n")
+	botUserIDs := strings.Split(botUserIDsStr, "\n")
 	webhookURLs := strings.Split(webhookURLsStr, "\n")
 	bearerTokens := strings.Split(bearerTokensStr, "\n")
 
