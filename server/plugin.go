@@ -65,7 +65,7 @@ func (p *BotWebhookPlugin) ParseBotConfig(botUserIDsStr, webhookURLsStr, bearerT
 		botConfigMap[botID] = botConfig
 	}
 
-	return botConfigMap
+	return botConfigMap, nil
 }
 
 func (p *BotWebhookPlugin) OnConfigurationChange() error {
