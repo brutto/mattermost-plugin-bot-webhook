@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"bytes"
 	"encoding/json"
 	"net/http"
@@ -28,7 +29,7 @@ type BotWebhookPlugin struct {
 	botConfigMap  map[string]BotConfig
 }
 
-func parseBotConfig(botUserIDsStr, webhookURLsStr, bearerTokensStr string) map[string]BotConfig {
+func (p *BotWebhookPlugin) ParseBotConfig(botUserIDsStr, webhookURLsStr, bearerTokensStr string) map[string]BotConfig {
 	botUserIDs := strings.Split(botUserIDsStr, "\n")
 	webhookURLs := strings.Split(webhookURLsStr, "\n")
 	bearerTokens := strings.Split(bearerTokensStr, "\n")
@@ -74,7 +75,12 @@ func (p *BotWebhookPlugin) OnConfigurationChange() error {
 		return err
 	}
 	p.configuration = &configuration
-	p.botConfigMap = parseBotConfig(configuration.BotUserID, configuration.WebhookURL, configuration.BearerToken)
+	p.botConfigMap, err = p.ParseBotConfig(configuration.BotUserID, configuration.WebhookURL, configuration.BearerToken)
+	if err != nil {
+		p.API.LogError(err)
+		return err
+	}
+	
 	return nil
 }
 
